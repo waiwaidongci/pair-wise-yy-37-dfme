@@ -71,32 +71,38 @@ def make_handler(service: Service, static_dir: str):
                 status = 400
             else:
                 status = 500
-            self._json(status, {"error": exc.__class__.__name__, "message": str(exc)})
+            payload = {"error": exc.__class__.__name__, "message": str(exc)}
+            details = getattr(exc, "details", None)
+            if details:
+                payload["details"] = details
+            self._json(status, payload)
 
         def do_GET(self) -> None:
             try:
                 path = urlparse(self.path).path
+                actor, role = self._identity()
+                del actor
                 if path == "/health":
                     self._json(200, {"status": "ok"})
                 elif path == "/":
                     self._html(root / "index.html")
                 elif path == "/api/items":
-                    actor, role = self._identity()
-                    del actor
                     self._json(200, {"items": service.list_items(role)})
                 elif path.startswith("/api/items/") and path.endswith("/records"):
                     item_id = int(path.split("/")[3])
-                    actor, role = self._identity()
-                    del actor
                     self._json(200, {"records": service.list_records(item_id, role)})
+                elif path.startswith("/api/items/") and path.endswith("/allowance"):
+                    item_id = int(path.split("/")[3])
+                    self._json(200, service.get_allowance(item_id, role))
                 elif path.startswith("/api/items/"):
                     item_id = int(path.rsplit("/", 1)[-1])
-                    actor, role = self._identity()
-                    del actor
                     self._json(200, service.get_item(item_id, role))
+                elif path == "/api/transfers":
+                    self._json(200, {"transfers": service.list_transfers(role)})
+                elif path.startswith("/api/transfers/"):
+                    transfer_id = int(path.split("/")[3])
+                    self._json(200, service.get_transfer(transfer_id, role))
                 elif path == "/api/audit":
-                    actor, role = self._identity()
-                    del actor
                     self._json(200, {"events": service.audit(role)})
                 else:
                     self._json(404, {"error": "not_found"})
@@ -119,6 +125,20 @@ def make_handler(service: Service, static_dir: str):
                     expected = body.get("expected_version")
                     self._json(200, service.transition(
                         item_id, target, expected, actor, role))
+                elif path.startswith("/api/items/") and path.endswith("/quantity"):
+                    item_id = int(path.split("/")[3])
+                    self._json(200, service.update_quantity(item_id, body, actor, role))
+                elif path == "/api/transfers":
+                    self._json(201, service.submit_transfer(body, actor, role))
+                elif path.startswith("/api/transfers/") and path.endswith("/accept"):
+                    transfer_id = int(path.split("/")[3])
+                    self._json(200, service.accept_transfer(transfer_id, actor, role))
+                elif path.startswith("/api/transfers/") and path.endswith("/settle"):
+                    transfer_id = int(path.split("/")[3])
+                    self._json(200, service.settle_transfer(transfer_id, actor, role))
+                elif path.startswith("/api/transfers/") and path.endswith("/recalculate"):
+                    transfer_id = int(path.split("/")[3])
+                    self._json(200, service.recalculate_transfer(transfer_id, actor, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:

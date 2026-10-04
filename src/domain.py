@@ -5,18 +5,35 @@ class ErrorKind:
     VALIDATION="validation"; NOT_FOUND="not_found"; FORBIDDEN="forbidden"; CONFLICT="conflict"
 class DomainError(Exception):
     kind=ErrorKind.VALIDATION
-    def __init__(self,message): super().__init__(message); self.message=message
+    def __init__(self,message,details=None):
+        super().__init__(message); self.message=message; self.details=details or {}
 class ValidationError(DomainError): kind=ErrorKind.VALIDATION
 class NotFoundError(DomainError): kind=ErrorKind.NOT_FOUND
 class PermissionDenied(DomainError): kind=ErrorKind.FORBIDDEN
 class ConflictError(DomainError): kind=ErrorKind.CONFLICT
 SEVERITIES=['low', 'medium', 'high', 'critical']; STATES=['draft', 'submitted', 'inspection', 'correction', 'approved']; ROLES=['applicant', 'inspector', 'compliance_manager', 'viewer']
+TRANSFER_STATES=['submitted', 'frozen', 'settled', 'released', 'failed']
+FREEZE_STATES=['active', 'released', 'settled']
+LEDGER_DIRECTIONS=['out', 'in']
 @dataclass(frozen=True)
 class Item:
     id:int; title:str; description:str; severity:str; quantity:float; threshold:float; status:str; version:int; external_ref:Optional[str]; created_by:str; created_at:str; updated_at:str
 @dataclass(frozen=True)
 class Record:
-    id:int; item_id:int; kind:str; detail:str; status:str; external_ref:Optional[str]; created_by:str; created_at:str
+    id:int; item_id:int; kind:str; detail:str; status:str; external_ref:Optional[str]; deduction:float; created_by:str; created_at:str
+@dataclass(frozen=True)
+class Transfer:
+    id:int; source_item_id:int; target_item_id:int; amount:float; status:str
+    source_version:int; target_version:int; source_quantity:float; target_quantity:float
+    allowance:float; basis:Dict[str,Any]; impact_scope:Dict[str,Any]
+    idempotency_key:Optional[str]; progress:Dict[str,Any]
+    created_by:str; created_at:str; updated_at:str; settled_at:Optional[str]
+@dataclass(frozen=True)
+class Freeze:
+    id:int; item_id:int; transfer_id:int; version:int; status:str; created_at:str; released_at:Optional[str]
+@dataclass(frozen=True)
+class LedgerEntry:
+    id:int; item_id:int; transfer_id:int; amount:float; direction:str; created_at:str
 @dataclass(frozen=True)
 class AuditEntry:
     id:int; action:str; entity_type:str; entity_id:int; actor:str; detail:Dict[str,Any]; previous_hash:str; entry_hash:str; created_at:str
